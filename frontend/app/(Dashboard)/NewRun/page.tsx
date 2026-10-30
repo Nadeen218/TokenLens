@@ -1,6 +1,7 @@
 "use client";
 import SideBar from "@/Components/SidBar/SideBar";
-import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, UploadCloud, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, Play, UploadCloud, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 type InputMode = "prompt" | "dataset"; // Define the available input modes
 const panel = "rounded-xl border border-[#1b2750] bg-[#0c1530] p-5";
@@ -12,6 +13,16 @@ const MAX_BYTES = 5 * 1024 * 1024;
 // Define the minimum and maximum number of models that can be selected for a run
 const MIN_MODELS = 2;
 const MAX_MODELS = 8;
+// Local storage key used to save and restore the New Run draft
+const DRAFT_KEY = "tokenlens:new-run-draft";
+// Default average input tokens used when dataset token estimation is unavailable
+const DEFAULT_AVG_ITEM_TOKENS = 150;
+/* Cost Estimation Helpers */
+// Estimate the number of tokens based on the text length
+const approxTokens = (text: string) => Math.ceil(text.length / 4);
+// Format the estimated cost in USD
+const usd = (value: number) =>
+  value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
 
 /*Types and Interfaces*/
 type ModelInfo = {
@@ -25,7 +36,11 @@ type ModelInfo = {
   isJudgeEligible: boolean;
 };
 
-type Rubric = { id: string; name: string; description?: string };
+type Rubric = {
+  id: string; name: string; description?: string
+  // Instructions sent to the Judge model
+  judge_instructions?: string;
+};
 type SavedDataset = { id: string; name: string; itemCount: number };
 
 type ApiModel = {
@@ -190,6 +205,8 @@ function normalizeModel(model: ApiModel): ModelInfo {
 }
 /*Main Component*/
 export default function NewRunPage() {
+  // Initialize Next.js router for navigation after creating a Run
+  const router = useRouter();
   // Store the currently selected input mode
   const [mode, setMode] = useState<InputMode>("prompt");
   // Store the user's prompt and optional system prompt
@@ -244,8 +261,8 @@ export default function NewRunPage() {
   // Store additional instructions for the Judge
   const [judgeInstructions, setJudgeInstructions] = useState("");
 
-  // Control whether model names are hidden during evaluation
-  const [hideNames, setHideNames] = useState(true);
+  // Model names must always be hidden from the Judge (FR4.4)
+  const hideNames = true;
 
   // Control whether answer order is swapped during evaluation
   const [swapOrder, setSwapOrder] = useState(false);
@@ -254,11 +271,14 @@ export default function NewRunPage() {
   const pickRubric = (id: string) => {
     setRubricId(id);
     const rubric = rubrics.find((r) => r.id === id);
-    setJudgeInstructions(rubric?.description ?? "");
+    setJudgeInstructions(rubric?.judge_instructions ?? "");
+
   };
   // Store success and error messages related to file upload
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  // Track whether a Run is currently being submitted
+  const [submitting, setSubmitting] = useState(false);
 
   // Handle file selection and validation
   const handleFile = async (file?: File) => {
@@ -317,6 +337,158 @@ export default function NewRunPage() {
   const judgeModels = models.filter(
     (model) => model.isActive && model.isJudgeEligible
   );
+  /*Input Validation*/
+
+  // Find the selected saved dataset
+  const savedDataset = datasets.find((d) => d.id === datasetId);
+
+  // Check whether the user has provided a valid input
+  const hasInput =
+    mode === "prompt"
+      ? prompt.trim().length > 0
+      : upload
+        ? upload.errors.length === 0 && upload.rows > 0
+        : !!savedDataset;
+
+  // Calculate the total number of dataset items
+  const itemCount =
+    mode === "prompt"
+      ? prompt.trim() ? 1 : 0
+      : upload
+        ? upload.errors.length === 0 ? upload.rows : 0
+        : (savedDataset?.itemCount ?? 0);
+
+  // Check whether all required fields are valid before starting a Run
+  const canRun =
+    !loading &&
+    !apiError &&
+    hasInput &&
+    modelCountOk &&
+    !!rubricId &&
+    !!judgeModelId &&
+    !submitting;
+
+
+  /*Cost Estimation*/
+
+  // Calculate the estimated model calls and comparison cost
+  const estimate = useMemo(() => {
+
+    // Get only the selected active models
+    const selectedModels = activeModels.filter((m) =>
+      selected.includes(m.id)
+    );
+
+    // Estimate input tokens based on the selected input mode
+    const inputTokens =
+      mode === "prompt"
+        ? approxTokens(systemPrompt + prompt)
+        : upload?.avgInputTokens || DEFAULT_AVG_ITEM_TOKENS;
+
+    // Estimate output tokens using half of the maximum output limit
+    const outputTokens = Math.round(maxTokens * 0.5);
+
+    // Calculate the total number of model calls
+    const calls = itemCount * selectedModels.length * repeats;
+
+    // Double the judge calls when answer order swapping is enabled
+    const judgeCalls = calls * (swapOrder ? 2 : 1);
+
+    // Check whether pricing information is available for all selected models
+    const hasPrices = selectedModels.every(
+      (m) =>
+        m.inputPricePerMtok !== null &&
+        m.outputPricePerMtok !== null
+    );
+
+    // Calculate the estimated comparison cost
+    const comparisonCost = hasPrices
+      ? selectedModels.reduce(
+        (sum, m) =>
+          sum +
+          itemCount *
+          repeats *
+          (
+            (
+              inputTokens * m.inputPricePerMtok! +
+              outputTokens * m.outputPricePerMtok!
+            ) / 1_000_000
+          ),
+        0
+      )
+      : null;
+
+    return {
+      calls,
+      judgeCalls,
+      comparisonCost,
+    };
+
+  }, [
+    activeModels,
+    selected,
+    mode,
+    systemPrompt,
+    prompt,
+    upload,
+    itemCount,
+    maxTokens,
+    repeats,
+    swapOrder,
+  ]);
+  /*Run Submission*/
+  // Build the request body that will be sent to the backend
+  const buildPayload = () => ({
+    name: runName.trim() || `Run ${new Date().toLocaleString()}`,
+    source: mode === "prompt" ? "prompt" : upload ? "upload" : "saved_dataset",
+    system_prompt: systemPrompt.trim() || null,
+    prompt: mode === "prompt" ? prompt.trim() : null,
+    dataset_id: mode === "dataset" && !upload ? datasetId : null,
+    items: mode === "dataset" && upload ? upload.items : null,
+    model_ids: selected,
+    judge_model_id: judgeModelId,
+    rubric_id: rubricId,
+    judge_instructions: judgeInstructions.trim() || null,
+    repeats,
+    temperature,
+    max_output_tokens: maxTokens,
+    swap_order: swapOrder,
+    hide_model_names: hideNames,
+  });
+
+  // Submit the Run creation request to the backend
+  const startRun = async () => {
+    if (!canRun) return;
+
+    setSubmitting(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const response = await fetch(`${API}/runs`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(buildPayload()),
+      });
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.detail ?? "Could not start the run.");
+      }
+
+      if (!data?.id) {
+        throw new Error("Run was created, but the response does not contain an ID.");
+      }
+
+      localStorage.removeItem(DRAFT_KEY);
+      router.push(`/runs/${data.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setSubmitting(false);
+    }
+  };
   /*ui*/
   return (
     <div className="min-h-screen bg-[#060b1f] text-slate-200">
@@ -655,15 +827,6 @@ export default function NewRunPage() {
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
-                    checked={hideNames}
-                    onChange={(e) => setHideNames(e.target.checked)}
-                    className="accent-[#4a5df0]"
-                  />
-                  Hide model names
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
                     checked={swapOrder}
                     onChange={(e) => setSwapOrder(e.target.checked)}
                     className="accent-[#4a5df0]"
@@ -674,6 +837,88 @@ export default function NewRunPage() {
             </div>
           </section>
         </div>
+        {/*row 3 : Cost Estimation & Actions*/}
+
+        <section className={`${panel} mt-5`}>
+
+          <div className="flex flex-wrap items-center justify-between gap-5">
+
+            {/* Display the number of items, selected models, and repeats */}
+            <div>
+              <p className="text-sm text-slate-400">
+                {itemCount} {itemCount === 1 ? "item" : "items"}
+                {" × "}
+                {selected.length} models
+                {" × "}
+                {repeats} repeats
+              </p>
+
+              {/* Display the estimated number of model and judge calls */}
+              <p className="mt-1 text-xs text-slate-500">
+                {estimate.calls} model calls
+                {" + "}
+                {estimate.judgeCalls} judge calls
+              </p>
+            </div>
+
+            {/* Display the estimated comparison cost */}
+            <div>
+              <p className="text-xs text-slate-400">
+                Estimated Comparison Cost
+              </p>
+
+              <p className="mt-1 text-xl font-semibold text-white">
+                {estimate.comparisonCost !== null
+                  ? `≈ ${usd(estimate.comparisonCost)}`
+                  : "Unavailable"}
+              </p>
+
+              <p className="mt-1 text-xs text-slate-500">
+                Judge cost is not included in this estimate.
+              </p>
+            </div>
+
+            {/*row 3 : Run Evaluation Button */}
+            <button
+              onClick={startRun}
+              disabled={!canRun}
+              className="flex items-center gap-2 rounded-lg bg-[#3347e0] px-7 py-2.5 text-sm font-medium text-white hover:bg-[#4256f0] disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {submitting ? (
+                <Loader2 size={16} className="animate-spin" />
+              ) : (
+                <Play size={16} />
+              )}
+              {submitting ? "Starting..." : "Run Evaluation"}
+            </button>
+
+          </div>
+
+          {/* Display success message */}
+          {success && (
+            <p className="mt-4 flex items-center gap-2 text-sm text-emerald-300">
+              <CheckCircle2 size={16} />
+              {success}
+            </p>
+          )}
+
+          {/* Display validation and API errors */}
+          {error && (
+            <p role="alert" className="mt-4 flex items-center gap-2 text-sm text-red-300">
+              <AlertCircle size={16} />
+              {error}
+            </p>
+          )}
+
+          {/* Explain what is missing before the Run can start */}
+          {!canRun && !loading && !apiError && (
+            <p className="mt-3 text-xs text-slate-500">
+              Complete the required fields, select 2 to 8 models,
+              choose a Judge Model, and select an evaluation rubric.
+            </p>
+          )}
+
+        </section>
       </main>
     </div>
   );
