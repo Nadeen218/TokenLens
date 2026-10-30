@@ -9,6 +9,9 @@ const field = "w-full rounded-lg border border-[#223062] bg-[#091129] px-3 py-2.
 // Define the maximum allowed dataset rows and file size
 const MAX_ROWS = 1000;
 const MAX_BYTES = 5 * 1024 * 1024;
+// Define the minimum and maximum number of models that can be selected for a run
+const MIN_MODELS = 2;
+const MAX_MODELS = 8;
 
 /*Types and Interfaces*/
 type ModelInfo = {
@@ -19,6 +22,7 @@ type ModelInfo = {
   outputPricePerMtok: number | null;
   contextWindow?: number;
   isActive: boolean;
+  isJudgeEligible: boolean;
 };
 
 type Rubric = { id: string; name: string; description?: string };
@@ -37,6 +41,8 @@ type ApiModel = {
   contextWindow?: number;
   is_active?: boolean;
   isActive?: boolean;
+  is_judge_eligible?: boolean;
+  isJudgeEligible?: boolean;
 };
 
 type DatasetItem = { input: string; expected_output?: string };
@@ -176,6 +182,10 @@ function normalizeModel(model: ApiModel): ModelInfo {
       model.output_price_per_mtok ?? model.outputPricePerMtok ?? null,
     contextWindow: model.context_window ?? model.contextWindow,
     isActive: model.is_active ?? model.isActive ?? true,
+    isJudgeEligible:
+      model.is_judge_eligible ??
+      model.isJudgeEligible ??
+      false,
   };
 }
 /*Main Component*/
@@ -205,6 +215,28 @@ export default function NewRunPage() {
   const [datasetId, setDatasetId] = useState("");
   // Track whether the user is dragging a file over the upload area
   const [dragging, setDragging] = useState(false);
+  // Store the IDs of the models selected for comparison
+  const [selected, setSelected] = useState<string[]>([]);
+
+  // Check whether the selected model count is within the allowed range (2–8)
+  const modelCountOk =
+    selected.length >= MIN_MODELS && selected.length <= MAX_MODELS;
+
+  // Toggle a model's selection while enforcing the maximum limit
+  const toggleModel = (id: string) => {
+    setSelected((current) => {
+      // Remove the model if it is already selected
+      if (current.includes(id)) {
+        return current.filter((item) => item !== id);
+      }
+
+      // Prevent selecting more than the maximum allowed models
+      if (current.length >= MAX_MODELS) return current;
+
+      // Add the newly selected model
+      return [...current, id];
+    });
+  };
   // Store success and error messages related to file upload
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -222,7 +254,7 @@ export default function NewRunPage() {
       setError("Could not read the selected file.");
     }
   };
-// Remove the uploaded file and reset the input field
+  // Remove the uploaded file and reset the input field
   const removeFile = () => {
     setUpload(null);
     if (fileRef.current) fileRef.current.value = "";
@@ -230,7 +262,7 @@ export default function NewRunPage() {
 
   useEffect(() => {
     let mounted = true;
-// Load models, rubrics, and datasets from the API when the component mounts
+    // Load models, rubrics, and datasets from the API when the component mounts
     async function loadData() {
       setLoading(true);
       setApiError("");
@@ -262,7 +294,10 @@ export default function NewRunPage() {
   /*Derived Data*/
   // Filter and return only active models for model selection
   const activeModels = useMemo(() => models.filter((m) => m.isActive), [models]);
-  
+  // Get only active models that are approved for Judge evaluation.
+  const judgeModels = models.filter(
+    (model) => model.isActive && model.isJudgeEligible
+  );
   /*ui*/
   return (
     <div className="min-h-screen bg-[#060b1f] text-slate-200">
@@ -496,6 +531,60 @@ export default function NewRunPage() {
           </section>
         </div>
         {/* Row 2: model selection  +  judge configuration */}
+        {/* Section for selecting models to compare and displaying the number of selected models */}
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <section className={panel}>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-semibold text-white">Comparison Models</h2>
+              <span className="text-xs text-slate-400">
+                {selected.length} / {MAX_MODELS} selected
+              </span>
+            </div>
+            <p className="mb-4 text-xs text-slate-500">Select between 2 and 8 active models to compare.</p>
+
+            {activeModels.length === 0 ? (
+              <p className="rounded-lg bg-[#091129] p-4 text-sm text-slate-400">
+                No active models are currently available.
+              </p>
+            ) : (
+              <ul className="max-h-80 space-y-2 overflow-y-auto">
+                {activeModels.map((model) => {
+                  const checked = selected.includes(model.id);
+                  const locked = !checked && selected.length >= MAX_MODELS;
+                  return (
+                    <li key={model.id}>
+                      <label
+                        className={`flex cursor-pointer items-center gap-3 rounded-lg border p-3 ${checked ? "border-[#3347e0] bg-[#3347e0]/10" : "border-[#1b2750] bg-[#091129]"
+                          } ${locked ? "cursor-not-allowed opacity-50" : ""}`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={locked}
+                          onChange={() => toggleModel(model.id)}
+                          className="h-4 w-4 accent-[#4a5df0]"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm text-white">{model.displayName}</span>
+                          <span className="text-xs text-slate-500">{model.provider}</span>
+                        </span>
+                        <span className="text-right text-xs text-slate-400">
+                          {model.inputPricePerMtok !== null && model.outputPricePerMtok !== null
+                            ? `$${model.inputPricePerMtok} / $${model.outputPricePerMtok}`
+                            : "Pricing unavailable"}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {!modelCountOk && (
+              <p className="mt-3 text-xs text-amber-300">Please select between 2 and 8 models.</p>
+            )}
+          </section>
+        {/* Row 2: judge configuration */}
+        </div>
       </main>
     </div>
   );
