@@ -237,6 +237,25 @@ export default function NewRunPage() {
       return [...current, id];
     });
   };
+  // Store the selected evaluation rubric and Judge model
+  const [rubricId, setRubricId] = useState("");
+  const [judgeModelId, setJudgeModelId] = useState("");
+
+  // Store additional instructions for the Judge
+  const [judgeInstructions, setJudgeInstructions] = useState("");
+
+  // Control whether model names are hidden during evaluation
+  const [hideNames, setHideNames] = useState(true);
+
+  // Control whether answer order is swapped during evaluation
+  const [swapOrder, setSwapOrder] = useState(false);
+
+  // Select a rubric and automatically load its description as Judge instructions
+  const pickRubric = (id: string) => {
+    setRubricId(id);
+    const rubric = rubrics.find((r) => r.id === id);
+    setJudgeInstructions(rubric?.description ?? "");
+  };
   // Store success and error messages related to file upload
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -583,7 +602,77 @@ export default function NewRunPage() {
               <p className="mt-3 text-xs text-amber-300">Please select between 2 and 8 models.</p>
             )}
           </section>
-        {/* Row 2: judge configuration */}
+          {/* Row 2: judge configuration */}
+          <section className={panel}>
+            <h2 className="mb-4 font-semibold text-white">Judge Configuration</h2>
+
+            <div className="mb-5">
+              <label htmlFor="judge-model" className={label}>Judge Model</label>
+              <select
+                id="judge-model"
+                value={judgeModelId}
+                onChange={(e) => setJudgeModelId(e.target.value)}
+                className={field}
+              >
+                <option value="">Select a judge model...</option>
+                {judgeModels.map((m) => ( // Only show models that are eligible to be used as a Judge
+                  <option key={m.id} value={m.id}>
+                    {m.displayName} ({m.provider})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="rubric" className={label}>Evaluation Rubric</label>
+                <select
+                  id="rubric"
+                  value={rubricId}
+                  onChange={(e) => pickRubric(e.target.value)}
+                  className={field}
+                >
+                  <option value="">Select a rubric...</option>
+                  {rubrics.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="judge-instructions" className={label}>Judge Instructions</label>
+                <textarea
+                  id="judge-instructions"
+                  value={judgeInstructions}
+                  onChange={(e) => setJudgeInstructions(e.target.value)}
+                  rows={4}
+                  placeholder="Define the criteria used to evaluate model responses..."
+                  className={field}
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-5 text-sm text-slate-300">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={hideNames}
+                    onChange={(e) => setHideNames(e.target.checked)}
+                    className="accent-[#4a5df0]"
+                  />
+                  Hide model names
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={swapOrder}
+                    onChange={(e) => setSwapOrder(e.target.checked)}
+                    className="accent-[#4a5df0]"
+                  />
+                  Swap answer order
+                </label>
+              </div>
+            </div>
+          </section>
         </div>
       </main>
     </div>
