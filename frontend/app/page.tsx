@@ -1,11 +1,11 @@
 
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { Eye, EyeOff, LockKeyhole, Mail, Sparkles } from "lucide-react";
-import { useRouter } from "next/navigation";
 import { base_usrl } from "@/lib/base-url";
+import { Eye, EyeOff, LockKeyhole, Mail, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function LoginPage() {
   const API_URL = base_usrl;
@@ -74,7 +74,7 @@ export default function LoginPage() {
       }
 
       // Navigate to Dashboard
-      router.push("/dashboard");
+      router.push(data.user?.role === "admin" ? "/admin" : "/dashboard");
 
     } catch (err) {
       if (err instanceof TypeError) {
