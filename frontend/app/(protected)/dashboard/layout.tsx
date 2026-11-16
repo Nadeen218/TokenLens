@@ -1,4 +1,4 @@
- import SideBar from "@/Components/SidBar/SideBar";
+import SideBar from "@/Components/SidBar/SideBar";
 
 export default function DashboardLayout({
   children,
@@ -6,11 +6,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-screen bg-[#060b1f]">
       <SideBar />
-     <main className="  sm:ml-64  ">
-          {children}
-        </main>
+      <main className="flex-1 w-full sm:ml-64">
+        {children}
+      </main>
     </div>
   );
 }
