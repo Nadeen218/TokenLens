@@ -1,9 +1,9 @@
 "use client";
 import SideBar from "@/Components/SidBar/SideBar";
 import StatCard from "@/Components/StatCard/StatCard";
+import { base_usrl } from "@/lib/base-url";
 import { AlertCircle, Cpu, Loader2, Plus, Search, Server, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { base_usrl } from "@/lib/base-url";
 
 const panel = "rounded-xl border border-[#1b2750] bg-[#0b132b] p-5";
 const field = "w-full rounded-lg border border-[#223062] bg-[#091129] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 focus:border-[#4a5df0] focus:outline-none focus:ring-1 focus:ring-[#4a5df0]";
@@ -22,15 +22,18 @@ type ModelItem = {
 const API = base_usrl;
 
 const authHeaders = (): HeadersInit => {
-  const token = 
-    localStorage.getItem("access_token") || 
-    localStorage.getItem("token") || 
-    sessionStorage.getItem("access_token") || 
+  const token =
+    localStorage.getItem("access_token") ||
+    localStorage.getItem("token") ||
+    sessionStorage.getItem("access_token") ||
     sessionStorage.getItem("token");
-    
+
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
-
+const PROVIDER_OPTIONS = [
+  { label: "Azure", value: "Azure" },
+  { label: "Google AI Studio", value: "gemini" },
+];
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -68,7 +71,7 @@ export default function ModelsPage() {
       const res = await fetch(`${API}/models`, { headers: authHeaders() });
       if (res.status === 401) throw new Error("Please log in again.");
       if (!res.ok) throw new Error("Failed to load models from backend.");
-      
+
       const data = await res.json();
       const formatted: ModelItem[] = data.map((m: any) => ({
         id: m.id,
@@ -107,7 +110,7 @@ export default function ModelsPage() {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify({
-          id: newModel.displayName.toLowerCase().replace(/\s+/g, "-"),
+          model_name: newModel.displayName.toLowerCase().replace(/\s+/g, "-"),
           provider: newModel.provider,
           display_name: newModel.displayName,
           input_price_per_mtok: parseFloat(newModel.inputPrice) || 0,
@@ -129,18 +132,37 @@ export default function ModelsPage() {
     }
   };
 
-  const toggleModelStatus = (id: string) => {
-    setModels(prev => prev.map(m => m.id === id ? { ...m, isActive: !m.isActive } : m));
-  };
+  const toggleModelStatus = async (id: string) => {
+    const current = models.find((m) => m.id === id);
+    if (!current) return;
+    const next = !current.isActive;
 
+    setModels((prev) => prev.map((m) => (m.id === id ? { ...m, isActive: next } : m)));
+
+    try {
+      const res = await fetch(`${API}/models/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify({ is_active: next }),
+      });
+      if (!res.ok) throw new Error("Failed to update model status.");
+    } catch (err) {
+      setModels((prev) => prev.map((m) => (m.id === id ? { ...m, isActive: !next } : m)));
+      alert(err instanceof Error ? err.message : "Could not update model.");
+    }
+  };
+  const providerList = useMemo(
+    () => Array.from(new Set(models.map((m) => m.provider))).sort(),
+    [models]
+  );
   const filteredModels = useMemo(() => {
     return models.filter(m => {
-      const matchesSearch = m.displayName.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                            m.provider.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch = m.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        m.provider.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesProvider = selectedProvider === "All Providers" || m.provider === selectedProvider;
-      const matchesStatus = selectedStatus === "All Statuses" || 
-                            (selectedStatus === "Active" && m.isActive) || 
-                            (selectedStatus === "Inactive" && !m.isActive);
+      const matchesStatus = selectedStatus === "All Statuses" ||
+        (selectedStatus === "Active" && m.isActive) ||
+        (selectedStatus === "Inactive" && !m.isActive);
       return matchesSearch && matchesProvider && matchesStatus;
     });
   }, [models, searchQuery, selectedProvider, selectedStatus]);
@@ -167,7 +189,7 @@ export default function ModelsPage() {
   return (
     <div className="min-h-screen bg-[#060b1f] text-slate-200">
       <SideBar />
-      <main className="min-w-0 px-4 pb-8 pt-20 sm:ml-64 sm:px-8">        
+      <main className="min-w-0 px-4 pb-8 pt-20 sm:ml-64 sm:px-8">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-white">Models</h1>
@@ -175,7 +197,7 @@ export default function ModelsPage() {
               Manage model providers, available models, and token pricing from backend.
             </p>
           </div>
-          
+
           {/* إظهار زر Add Model حصرياً للـ Admin */}
           {isAdmin && (
             <button
@@ -224,10 +246,9 @@ export default function ModelsPage() {
               className="rounded-lg border border-[#223062] bg-[#091129] px-3 py-2.5 text-sm text-slate-300 focus:border-[#4a5df0] focus:outline-none"
             >
               <option value="All Providers">All Providers</option>
-              <option value="Azure">Azure / OpenAI</option>
-              <option value="Anthropic">Anthropic</option>
-              <option value="Meta">Meta</option>
-              <option value="Google">Google</option>
+              {providerList.map((p) => (
+                <option key={p} value={p}>{p}</option>
+              ))}
             </select>
 
             <select
@@ -253,13 +274,13 @@ export default function ModelsPage() {
                 <th className="py-3.5 px-4">Input / 1M Tokens</th>
                 <th className="py-3.5 px-4">Output / 1M Tokens</th>
                 <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                {isAdmin && <th className="py-3.5 px-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-[#1b2750]/60 text-sm">
               {filteredModels.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500">
+                  <td colSpan={isAdmin ? 7 : 6} className="py-8 text-center text-slate-500">
                     {loading ? "Loading..." : "No models found."}
                   </td>
                 </tr>
@@ -277,27 +298,28 @@ export default function ModelsPage() {
                     <td className="py-3.5 px-4 text-slate-300">${model.inputPricePerMtok.toFixed(2)}</td>
                     <td className="py-3.5 px-4 text-slate-300">${model.outputPricePerMtok.toFixed(2)}</td>
                     <td className="py-3.5 px-4">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${
-                        model.isActive 
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" 
-                          : "border-red-500/30 bg-red-500/10 text-red-300"
-                      }`}>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium border ${model.isActive
+                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                        : "border-red-500/30 bg-red-500/10 text-red-300"
+                        }`}>
                         {model.isActive ? "Active" : "Inactive"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 text-right">
-                      <div className="flex items-center justify-end gap-3">
-                        <label className="relative inline-flex items-center cursor-pointer">
-                          <input 
-                            type="checkbox" 
-                            checked={model.isActive} 
-                            onChange={() => toggleModelStatus(model.id)}
-                            className="sr-only peer" 
-                          />
-                          <div className="w-9 h-5 bg-[#1b2750] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#3347e0]"></div>
-                        </label>
-                      </div>
-                    </td>
+                   {isAdmin && (
+  <td className="py-3.5 px-4 text-right">
+    <div className="flex items-center justify-end gap-3">
+      <label className="relative inline-flex items-center cursor-pointer">
+        <input
+          type="checkbox"
+          checked={model.isActive}
+          onChange={() => toggleModelStatus(model.id)}
+          className="sr-only peer"
+        />
+        <div className="w-9 h-5 bg-[#1b2750] rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#3347e0]"></div>
+      </label>
+    </div>
+  </td>
+)}
                   </tr>
                 ))
               )}
@@ -324,13 +346,16 @@ export default function ModelsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-300">Provider Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Azure, OpenAI, Anthropic"
+                  <select
                     value={newModel.provider}
                     onChange={(e) => setNewModel({ ...newModel, provider: e.target.value })}
                     className={field}
-                  />
+                  >
+                    <option value="">Select a provider...</option>
+                    {PROVIDER_OPTIONS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.label}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-300">Model Display Name</label>
@@ -368,13 +393,13 @@ export default function ModelsPage() {
                 </div>
               </div>
               <div className="mt-6 flex justify-end gap-3 border-t border-[#1b2750] pt-4">
-                <button 
+                <button
                   onClick={() => setIsModalOpen(false)}
                   className="rounded-lg border border-[#2a3a78] px-4 py-2 text-sm text-slate-300 hover:bg-white/5"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   onClick={handleAddModel}
                   disabled={submitting}
                   className="flex items-center gap-2 rounded-lg bg-[#3347e0] px-5 py-2 text-sm font-medium text-white hover:bg-[#4256f0] disabled:opacity-50"
