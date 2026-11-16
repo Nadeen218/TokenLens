@@ -21,8 +21,8 @@ def resolve_client(
 ) -> ModelClient:
     """Build the ModelClient serving spec.provider, injected with its API key.
 
-    Per-model settings (reasoning level, timeout, token-parameter name,
-    temperature support) travel on the spec; base URL and auth scheme are
+    Per-model settings (reasoning level, timeout, token-parameter name) travel
+    on the spec; base URL and auth scheme are
     per-provider here. Raises ValueError naming the unsupported provider and
     the supported ones if none matches.
     """

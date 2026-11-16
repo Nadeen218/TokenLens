@@ -6,11 +6,11 @@ import uuid
 from dataclasses import dataclass
 from decimal import Decimal
 
-from arq.connections import RedisSettings
 from sqlalchemy import select
 
 import app.dbconfig as dbconfig
 from app.config import settings
+from app.redis_config import redis_settings_from_url
 from app.models.entities import (
     Dataset,
     DatasetItem,
@@ -225,5 +225,5 @@ async def run_evaluation(ctx: dict, run_id: str) -> None:
 
 class WorkerSettings:
     functions = [run_evaluation]
-    redis_settings = RedisSettings.from_dsn(settings.redis_url)
+    redis_settings = redis_settings_from_url(settings.redis_url)
     max_jobs = 10

@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.redis_config import redis_settings_from_url
 from app.models.entities import (
     Dataset,
     DatasetItem,
@@ -40,7 +41,7 @@ _redis_pool: Any = None
 async def _get_redis_pool() -> Any:
     global _redis_pool
     if _redis_pool is None:
-        _redis_pool = await arq.create_pool(arq.connections.RedisSettings.from_dsn(settings.redis_url))
+        _redis_pool = await arq.create_pool(redis_settings_from_url(settings.redis_url))
     return _redis_pool
 
 

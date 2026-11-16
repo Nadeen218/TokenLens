@@ -1,15 +1,14 @@
 """The judge: scores one answer, or compares two with the order swapped.
 
-Runs at temperature 0 through an injected execution-layer client (inheriting its
-retry and concurrency). On an invalid reply it retries once naming the fault,
-then records a failed judgment rather than fabricating a score.
+Provider requests use their default temperature. On an invalid reply the judge
+retries once naming the fault, then records a failed judgment rather than
+fabricating a score.
 """
 
 from collections.abc import Callable
 from typing import TypeVar
 
 from evaluation.contracts import CallStatus, ModelClient, ModelResponse, ModelSpec
-from evaluation.judging.guards import ensure_temperature_pinnable
 from evaluation.judging.parsing import parse_pairwise_verdict, parse_scoring_verdict
 from evaluation.judging.prompt import render_pairwise_prompt, render_scoring_prompt
 from evaluation.judging.rubric import Rubric
@@ -28,7 +27,7 @@ _Parsed = TypeVar("_Parsed")
 
 
 class Judge:
-    """Scores support answers against a rubric, using a model that can be pinned to temperature 0."""
+    """Scores support answers against a rubric with an explicitly configured judge."""
 
     def __init__(
         self,
@@ -37,7 +36,6 @@ class Judge:
         rubric: Rubric,
         max_output_tokens: int = _DEFAULT_MAX_OUTPUT_TOKENS,
     ) -> None:
-        ensure_temperature_pinnable(judge_spec)
         self._client = client
         self._judge_spec = judge_spec
         self._rubric = rubric

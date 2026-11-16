@@ -607,7 +607,7 @@ export default function NewRunPage() {
         if (!res.ok) throw new Error(errorMessage(data, "Could not upload the dataset."));
         finalDatasetId = data.id;
       }
-// Creates a new run with the specified parameters, including the dataset ID, rubric ID, selected models, judge model, repeats, temperature, and swap order. Handles errors and navigates to the new run page upon success.
+// Creates a new run with the selected dataset, rubric, models, and run settings.
       const response = await fetch(`${API}/runs`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
@@ -618,7 +618,6 @@ export default function NewRunPage() {
           model_ids: selected,
           judge_model_id: judgeModelId,
           repeats,
-          temperature,
           swap_order: swapOrder,
         }),
       });
@@ -856,20 +855,9 @@ export default function NewRunPage() {
                 />
               </div>
               <div>
-                <label htmlFor="temperature" className={label}>Temperature</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    id="temperature"
-                    type="range"
-                    min={0}
-                    max={2}
-                    step={0.1}
-                    value={temperature}
-                    onChange={(e) => setTemperature(Number(e.target.value))}
-                    className="w-full accent-[#4a5df0]"
-                  />
-                  <span className="w-12 text-center text-sm">{temperature.toFixed(1)}</span>
-                </div>
+                <p className="text-sm text-slate-400">
+                  Models use their provider&apos;s default temperature.
+                </p>
               </div>
               <div>
                 <label htmlFor="repeats" className={label}>Repeats</label>

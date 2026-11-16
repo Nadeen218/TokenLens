@@ -64,7 +64,7 @@ services:
     environment:
       # Public (non-secret) — the browser talks to the backend through
       # this URL, so no provider keys ever reach the frontend container.
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-https://back-a8efgycrdeh0a8ht.uaenorth-01.azurewebsites.net}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://127.0.0.1:8000}
     ports:
       - "3000:3000"
     volumes:

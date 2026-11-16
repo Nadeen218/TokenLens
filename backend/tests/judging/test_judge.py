@@ -75,11 +75,10 @@ async def test_transport_failure_is_not_retried_for_json() -> None:
     assert len(client.calls) == 1
 
 
-def test_judge_rejects_a_model_that_cannot_be_pinned_to_temperature_zero() -> None:
+def test_judge_accepts_a_model_that_cannot_be_pinned_to_temperature_zero() -> None:
     spec = make_judge_spec(accepts_custom_temperature=False)
 
-    with pytest.raises(ValueError):
-        Judge(StubJudgeClient([]), spec, _RUBRIC)
+    Judge(StubJudgeClient([]), spec, _RUBRIC)
 
 
 def test_judge_may_not_be_one_of_the_judged_models() -> None:

@@ -41,7 +41,7 @@ class ModelSpec(BaseModel):
     )
     accepts_custom_temperature: bool = Field(
         default=True,
-        description="Whether a non-default temperature is allowed; when False the adapter omits it and the provider default applies.",
+        description="Whether the deployment supports a custom temperature; provider requests use the default.",
     )
     response_format: str | None = Field(
         default=None,

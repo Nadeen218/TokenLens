@@ -1,7 +1,7 @@
 """Adapter for any OpenAI-compatible chat-completions endpoint — serves Azure AI
 Foundry. Base URL and auth scheme are per-provider constructor arguments;
-which parameters a deployment accepts (token-limit name, temperature,
-reasoning_effort) vary per model and travel on the ModelSpec.
+which parameters a deployment accepts (token-limit name and reasoning_effort)
+vary per model and travel on the ModelSpec.
 """
 
 import time
@@ -75,7 +75,7 @@ class OpenAICompatibleClient(ModelClient):
         if not self._api_key:
             return failed_response(0, prices_snapshot, f"No API key configured for provider '{spec.provider}'.")
 
-        payload = _build_payload(spec, prompt, system_prompt, temperature, max_output_tokens)
+        payload = _build_payload(spec, prompt, system_prompt, max_output_tokens)
         headers = self._auth_headers()
         timeout_seconds = resolve_timeout_seconds(spec)
 
@@ -111,10 +111,9 @@ def _build_payload(
     spec: ModelSpec,
     prompt: str,
     system_prompt: str | None,
-    temperature: float,
     max_output_tokens: int,
 ) -> dict[str, Any]:
-    """Shape the request to what this deployment accepts: token-param name, temperature, reasoning_effort."""
+    """Shape the request to what this deployment accepts."""
     messages: list[dict[str, str]] = []
     if system_prompt:
         messages.append({"role": "system", "content": system_prompt})
@@ -122,8 +121,6 @@ def _build_payload(
 
     token_param = "max_completion_tokens" if spec.uses_max_completion_tokens else "max_tokens"
     payload: dict[str, Any] = {"model": spec.model_name, "messages": messages, token_param: max_output_tokens}
-    if spec.accepts_custom_temperature:
-        payload["temperature"] = temperature
     if spec.reasoning_level is not None:
         payload["reasoning_effort"] = spec.reasoning_level
     if spec.response_format is not None:

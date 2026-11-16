@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     google_api_key: str | None = None
     azure_api_key: str | None = None
-    cors_allowed_origins: str = "https://front-a8efgycrdeh0a8ht.uaenorth-01.azurewebsites.net"
+    cors_allowed_origins: str = "*"
 
 
 settings = Settings()

@@ -64,11 +64,9 @@ _GPT_61_SOL = ModelSpec(
         "Compared, premium, OpenAI family; the high end of the ~13x price "
         "spread. Microsoft Azure Retail Prices API, 'Azure OpenAI GPT6', "
         "short-context Standard Global (long-context tiers cost more). Requires "
-        "max_completion_tokens. WAS A JUDGE, MOVED TO THE COMPARED SET: it only "
-        "accepts its default temperature, so it cannot be pinned to 0 and its "
-        "scores would not be reproducible — do not restore it as a judge. The "
-        "same temperature limit also adds randomness to its own run-to-run "
-        "variance here. Reports reasoning_tokens, unlike gpt-oss-120b."
+        "max_completion_tokens. Uses its default temperature, so results and "
+        "judgment scores may vary between runs. Reports reasoning_tokens, "
+        "unlike gpt-oss-120b."
     ),
     is_active=True,
     uses_max_completion_tokens=True,
@@ -86,9 +84,8 @@ _LLAMA_33_70B = ModelSpec(
     cached_input_price_per_mtok=None,
     pricing_notes=(
         "Default judge. Microsoft Azure Retail Prices API, 'Azure Llama "
-        "Models', Global Standard; no cached-input meter. Chosen as judge over "
-        "gpt-6.1-sol because it accepts temperature 0 (reproducible scores) and "
-        "is from a family unrelated to all three compared models (no "
+        "Models', Global Standard; no cached-input meter. Chosen as judge "
+        "because it is from a family unrelated to the compared models (no "
         "same-family bias). Meta family. JSON MODE: this deployment emits "
         "trailing commas without response_format and silently ignores "
         "json_schema (accepted but not enforced, verified by live probe), but "
@@ -99,6 +96,26 @@ _LLAMA_33_70B = ModelSpec(
     is_judge_eligible=True,
     request_timeout_seconds=120.0,
     response_format="json_object",
+)
+
+_GPT_6_ASTRA = ModelSpec(
+    provider="azure_ai_foundry",
+    model_name="gpt-6-astra",
+    display_name="GPT-6 Astra (Azure, judge)",
+    context_window=128000,
+    input_price_per_mtok=Decimal("1.00"),
+    output_price_per_mtok=Decimal("3.00"),
+    cached_input_price_per_mtok=None,
+    pricing_notes=(
+        "Provisional configuration: input and output prices come from the existing "
+        "database record; the context window and request capabilities must be "
+        "verified against the Azure deployment. Uses the provider's default "
+        "temperature for judging, so scores may vary between runs."
+    ),
+    is_active=True,
+    is_judge_eligible=True,
+    uses_max_completion_tokens=True,
+    accepts_custom_temperature=False,
 )
 
 _GEMINI_JUDGE = ModelSpec(
@@ -123,7 +140,7 @@ _GEMINI_JUDGE = ModelSpec(
 )
 
 _COMPARED_MODELS: tuple[ModelSpec, ...] = (_GPT_OSS_120B, _GPT_41, _GPT_61_SOL)
-_JUDGE_MODELS: tuple[ModelSpec, ...] = (_LLAMA_33_70B, _GEMINI_JUDGE)
+_JUDGE_MODELS: tuple[ModelSpec, ...] = (_LLAMA_33_70B, _GPT_6_ASTRA, _GEMINI_JUDGE)
 _DEFAULT_JUDGE = _LLAMA_33_70B
 
 
@@ -138,7 +155,7 @@ def list_judge_models() -> list[ModelSpec]:
 
 
 def get_default_judge() -> ModelSpec:
-    """The judge used unless a run chooses another; Llama, which can be pinned to temperature 0."""
+    """The judge used unless a run chooses another."""
     return _DEFAULT_JUDGE
 
 

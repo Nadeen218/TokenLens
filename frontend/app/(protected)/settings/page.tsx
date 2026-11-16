@@ -372,21 +372,9 @@ export default function SettingsPage() {
 
                 <div className="space-y-5">
                   <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <label className={labelClass}>Temperature</label>
-                      <span className="rounded border border-[#223062] bg-[#091129] px-2 py-0.5 font-mono text-xs text-slate-200">
-                        {temperature.toFixed(1)}
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0}
-                      max={2}
-                      step={0.1}
-                      value={temperature}
-                      onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                      className="w-full cursor-pointer accent-[#3347e0]"
-                    />
+                    <p className="text-sm text-slate-400">
+                      Models use their provider&apos;s default temperature.
+                    </p>
                   </div>
 
                   <div>

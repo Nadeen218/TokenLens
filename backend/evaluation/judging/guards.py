@@ -6,7 +6,7 @@ from evaluation.contracts import ModelSpec
 
 
 def ensure_temperature_pinnable(judge_spec: ModelSpec) -> None:
-    """The judge runs at temperature 0; refuse a model that cannot be pinned to it."""
+    """Check whether a model supports explicitly setting temperature 0."""
     if not judge_spec.accepts_custom_temperature:
         raise ValueError(
             f"Judge '{judge_spec.model_name}' cannot be pinned to temperature 0 "

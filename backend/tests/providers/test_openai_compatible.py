@@ -265,13 +265,12 @@ async def test_spec_selects_max_completion_tokens_over_max_tokens() -> None:
     assert "max_tokens" not in body
 
 
-async def test_temperature_is_omitted_when_not_accepted() -> None:
+async def test_temperature_is_omitted_for_all_models() -> None:
     captured: list[httpx.Request] = []
-    spec = make_spec("azure_ai_foundry", "gpt-6.1-sol", accepts_custom_temperature=False)
-
-    await _client(_capturing_handler(captured)).complete(spec, "hi", None, 0.0, 50)
-
-    assert "temperature" not in json.loads(captured[0].content)
+    for accepts_custom_temperature in (True, False):
+        spec = make_spec("azure_ai_foundry", "test-model", accepts_custom_temperature=accepts_custom_temperature)
+        await _client(_capturing_handler(captured)).complete(spec, "hi", None, 0.7, 50)
+    assert all("temperature" not in json.loads(request.content) for request in captured)
 
 
 async def test_response_format_is_sent_only_when_the_spec_sets_it() -> None:
