@@ -1,5 +1,6 @@
 "use client";
 import SideBar from "@/Components/SidBar/SideBar";
+import { base_usrl } from "@/lib/base-url";
 import {
   Award,
   BarChart2,
@@ -31,7 +32,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { base_usrl } from "@/lib/base-url";
 
 // Types 
 
@@ -344,8 +344,8 @@ async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
       res.status === 401
         ? "Unauthorized. Please log in again."
         : res.status === 404
-        ? "Run not found."
-        : `Failed to load ${path} (status ${res.status}).`
+          ? "Run not found."
+          : `Failed to load ${path} (status ${res.status}).`
     );
   }
   return res.json();
@@ -388,7 +388,7 @@ function buildRunData(run: ApiRun, results: ApiResult[], dataset: ApiDataset | n
     const values = r.judgments.map((j) => Number(j.score)).filter((v) => Number.isFinite(v) && v >= min);
     return values.length ? toPercent(mean(values)) : null;
   };
-// Group results by model, in the order of the run's model_ids, then any extra models that were not in the run.
+  // Group results by model, in the order of the run's model_ids, then any extra models that were not in the run.
   const byModel = new Map<string, ApiResult[]>();
   for (const r of results) {
     if (!byModel.has(r.model_id)) byModel.set(r.model_id, []);
@@ -398,7 +398,7 @@ function buildRunData(run: ApiRun, results: ApiResult[], dataset: ApiDataset | n
     ...run.model_ids.filter((id) => byModel.has(id)),
     ...[...byModel.keys()].filter((id) => !run.model_ids.includes(id)),
   ];
-// Aggregate results for each model.
+  // Aggregate results for each model.
   const modelsSummary: ModelResult[] = orderedModelIds.map((modelId) => {
     const rs = byModel.get(modelId)!;
     const scores = rs.map(resultScore).filter((v): v is number => v !== null);
@@ -420,7 +420,7 @@ function buildRunData(run: ApiRun, results: ApiResult[], dataset: ApiDataset | n
       latencyVal: round(avgLatencyMs / 1000, 2),
     };
   });
-// Group results by item, in the order of their position in the dataset.
+  // Group results by item, in the order of their position in the dataset.
   const byItem = new Map<string, ApiResult[]>();
   for (const r of results) {
     if (!byItem.has(r.item_id)) byItem.set(r.item_id, []);
@@ -430,8 +430,6 @@ function buildRunData(run: ApiRun, results: ApiResult[], dataset: ApiDataset | n
 
   const detailedResults: DetailedItem[] = items.map((rs, index) => {
     const scores: DetailedItem["scores"] = {};
-    let bestModel = "—";
-    let bestScore = -Infinity;
     for (const modelId of orderedModelIds) {
       const mine = rs.filter((r) => r.model_id === modelId);
       if (mine.length === 0) continue;
@@ -446,11 +444,18 @@ function buildRunData(run: ApiRun, results: ApiResult[], dataset: ApiDataset | n
         response: first.status === "ok" ? first.output_text : `Failed: ${first.error_message ?? "unknown error"}`,
         failed: mine.every((r) => r.status !== "ok"),
       };
-      if (score !== null && score > bestScore) {
-        bestScore = score;
-        bestModel = name;
-      }
     }
+    const scoreValues = Object.values(scores)
+      .map((s) => s.score)
+      .filter((v): v is number => v !== null);
+    const best = scoreValues.length ? Math.max(...scoreValues) : null;
+    const winners =
+      best === null
+        ? []
+        : Object.entries(scores)
+          .filter(([, s]) => s.score === best)
+          .map(([name]) => name);
+    const bestModel = winners.length ? winners.join(" / ") : "—";
     return { id: index + 1, input: rs[0].question_text, scores, bestModel };
   });
 
@@ -552,7 +557,7 @@ function RunResultsContent({ params }: { params: Promise<{ id: string }> }) {
         timer = setTimeout(() => fetchRunDetails(false), 3000);
       }
     }
-// Fetch run details on mount, and poll every few seconds if the run is still active.
+    // Fetch run details on mount, and poll every few seconds if the run is still active.
     fetchRunDetails(true);
     return () => {
       controller.abort();
@@ -570,7 +575,7 @@ function RunResultsContent({ params }: { params: Promise<{ id: string }> }) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
-// Close dropdowns and modals when pressing Escape.
+  // Close dropdowns and modals when pressing Escape.
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -648,7 +653,7 @@ function RunResultsContent({ params }: { params: Promise<{ id: string }> }) {
       </div>
     );
   }
-// Determine if the run is still active (queued or running) or has failed (failed or cancelled).
+  // Determine if the run is still active (queued or running) or has failed (failed or cancelled).
   const isActive = runData.status === "queued" || runData.status === "running";
   const isFailed = runData.status === "failed" || runData.status === "cancelled";
   const noResults = modelsSummary.length === 0;
@@ -756,13 +761,12 @@ function RunResultsContent({ params }: { params: Promise<{ id: string }> }) {
                 <span className="text-xs text-slate-400">Run:</span>
                 <span className="font-semibold text-white text-sm">{runData.name}</span>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${
-                    runData.status === "completed"
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium border ${runData.status === "completed"
                       ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
                       : isFailed
-                      ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                      : "bg-amber-500/10 text-amber-400 border-amber-500/20"
-                  }`}
+                        ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                        : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                    }`}
                 >
                   {runData.status}
                 </span>
@@ -910,9 +914,8 @@ function RunResultsContent({ params }: { params: Promise<{ id: string }> }) {
                   <button
                     key={tab}
                     onClick={() => setActiveTab(tab)}
-                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                      activeTab === tab ? "bg-[#3347e0] text-white" : "text-slate-400 hover:text-white"
-                    }`}
+                    className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${activeTab === tab ? "bg-[#3347e0] text-white" : "text-slate-400 hover:text-white"
+                      }`}
                   >
                     {tab}
                   </button>
